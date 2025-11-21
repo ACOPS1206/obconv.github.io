@@ -337,8 +337,9 @@ Most Of All... It's
 
 ## DONATE
 ---
-Just give me the star ;]]]]
-    <3
+you can DONATE
+<a href="https://ko-fi.com/acops">HERE</a>
+https://ko-fi.com/acops
 
 <br>
 
@@ -402,6 +403,327 @@ function simpleMarkdown(md) {
         const copyButton = `
             <button class="copy-code-btn" title="Copy code">
                 <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M5.75 1a.75.75 0 0 0-.75.75v1.5h-.75A1.75 1.75 0 0 0 2.5 5v8.25c0 .966.784 1.75 1.75 1.75h5.5A1.75 1.75 0 0 0 11.5 13.25V5A1.75 1.75 0 0 0 9.75 3.25h-.75v-1.5A.75.75 0 0 0 8.25 1h-2.5ZM3.5 5A.25.25 0 0 1 3.75 4.75h5.5a.25.25 0 0 1 .25.25v8.25a.25.25 0 0 1-.25.25h-5.5A.25.25 0 0 1 3.5 13.25V5ZM6 2.5v.75h3V2.5h-3Z"></path>
+                </svg>
+            </button>`;
+
+        const blockHtml = `\n<div class="code-block-wrapper">${copyButton}<pre><code class="language-${lang}">${escapedCode}</code></pre></div>\n`;
+        codeBlocks.push(blockHtml);
+        return `\n__CODE_BLOCK_${codeBlocks.length - 1}__\n`;
+    });
+
+    // 2. 나머지 블록 요소 처리
+    html = '\n' + html + '\n';
+
+    // Horizontal Rules
+    html = html.replace(/\n(---|\*\*\*)\n/g, "\n<hr>\n");
+
+    // Headers (h1-h6) - (USER FIX)
+    // 콜백 함수를 사용해 캡처한 content를 즉시 parseInline으로 처리합니다.
+    html = html.replace(/\n(######) (.*)/g, (match, h, content) => `\n<h6>${parseInline(content)}</h6>`)
+               .replace(/\n(#####) (.*)/g, (match, h, content) => `\n<h5>${parseInline(content)}</h5>`)
+               .replace(/\n(####) (.*)/g, (match, h, content) => `\n<h4>${parseInline(content)}</h4>`)
+               .replace(/\n(###) (.*)/g, (match, h, content) => `\n<h3>${parseInline(content)}</h3>`)
+               .replace(/\n(##) (.*)/g, (match, h, content) => `\n<h2>${parseInline(content)}</h2>`)
+               .replace(/\n(#) (.*)/g, (match, h, content) => `\n<h1>${parseInline(content)}</h1>`);
+
+    // (FIXED) Blockquotes - (USER FIX)
+    // 인용문은 내부에 다른 블록(헤더, 목록 등)이 또 올 수 있으므로 '재귀 호출' 방식을 유지합니다.
+    html = html.replace(/\n((?:> ?.*(?:\n|$))+)/g, (match, block) => {
+        const content = block.replace(/^> ?/gm, ''); 
+        const innerHtml = simpleMarkdown(content); // 재귀 호출
+        return '\n<blockquote>' + innerHtml + '</blockquote>\n';
+    });
+
+    // Images
+    html = html.replace(/!\[(.*?)\]\((.*?)\)/gim, '<img src="$2" alt="$1" style="max-width: 100%;">');
+
+    // Lists (Task, Unordered, Ordered) - (USER FIX)
+    // 콜백 함수를 사용해 캡처한 content를 즉시 parseInline으로 처리합니다.
+    html = html.replace(/\n- \[(x|X)\] (.*)/g, (match, x, content) => `\n<li class="task-list-item checked">${parseInline(content)}</li>`)
+               .replace(/\n- \[ \] (.*)/g, (match, content) => `\n<li class="task-list-item">${parseInline(content)}</li>`)
+               .replace(/\n\d+\. (.*)/g, (match, content) => `\n<li class="ol-item">${parseInline(content)}</li>`)
+               .replace(/\n- (.*)/g, (match, content) => `\n<li class="ul-item">${parseInline(content)}</li>`);
+
+    // List Grouping
+    html = html.replace(/((?:\n<li class="ul-item">.*<\/li>)+)/g, "\n<ul>$1\n</ul>")
+               .replace(/((?:\n<li class="ol-item">.*<\/li>)+)/g, "\n<ol>$1\n</ol>")
+               .replace(/((?:\n<li class="task-list-item.*<\/li>)+)/g, "\n<ul class=\"task-list\">$1\n</ul>");
+
+    // 3. (FIXED) 단락(<p>) 및 인라인 요소 처리
+    html = html.split('\n').map(line => {
+        const trimmed = line.trim();
+        if (trimmed === "") return "";
+
+        // (FIXED) 이 검사는 이제 안전합니다.
+        // 왜냐하면 h1, li 등은 이미 위에서 인라인 파싱이 완료된 상태이기 때문입니다.
+        if (/^__CODE_BLOCK_/.test(trimmed) || /^<(h[1-6]|ul|ol|li|pre|code|blockquote|hr|img|div)/.test(trimmed) || /^<\/(ul|ol|blockquote)>$/.test(trimmed)) {
+            return line; 
+        }
+
+        // 위에서 걸러지지 않은 나머지 줄(일반 <p> 문단)에 대해 인라인 파서를 실행합니다.
+        line = parseInline(line);
+
+        return `<p>${line}</p>`;
+    }).join('\n');
+
+    // 4. (FIXED) 코드 블록 토큰을 다시 HTML로 복원
+    html = html.replace(/<p>__CODE_BLOCK_(\d+)__<\/p>|__CODE_BLOCK_(\d+)__/g, (match, p1, p2) => {
+        const index = p1 || p2;
+        return codeBlocks[index];
+    });
+
+    // 5. Cleanup
+    html = html.replace(/<p> <\/p>/g, '')
+               .replace(/<p><\/p>/g, '')
+               .replace(/\n/g, '');
+
+    return html.trim();
+}
+
+</script>
+
+<script>
+function highlightCode() {
+  document.querySelectorAll('pre code').forEach(block => {
+    if (block.querySelector('span.hljs-keyword')) {
+        return;
+    }
+
+    block.innerHTML = block.innerHTML
+      .replace(/("[^"]*"|'[^']*')/g, '<span class="hljs-string">$1</span>')
+      .replace(/(def|class|return|import|from|if|else|for|while|print)/g, '<span class="hljs-keyword">$1</span>')
+      .replace(/(#.*$)/gm, '<span class="hljs-comment">$1</span>')
+      .replace(/(\d+)/g, '<span class="hljs-number">$1</span>');
+  });
+}
+</script>
+
+<script>
+const editor = document.getElementById('editor');
+const preview = document.getElementById('preview');
+const htmlView = document.getElementById('html-code-view'); // (NEW)
+const cssSnippet = document.getElementById('cssSnippet');
+const applyBtn = document.getElementById('applyCSS');
+const toggleBtn = document.getElementById('toggleTheme');
+// (REMOVED) exportBtn, copyBtn
+
+// ===================================
+//  스마트 에디터 기능
+// ===================================
+editor.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        this.value = this.value.replace(/\r\n/g, '\n');
+    }
+
+    const start = this.selectionStart;
+    const end = this.selectionEnd;
+    const text = this.value;
+
+    // 1. 괄호, 따옴표, 백틱 자동 완성
+    const pairs = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' };
+
+    if (pairs[e.key]) {
+        e.preventDefault();
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+
+        if (start !== end) {
+            const selected = text.substring(start, end);
+            this.value = before + e.key + selected + pairs[e.key] + after;
+            this.setSelectionRange(start + 1, end + 1);
+        } else {
+            this.value = before + e.key + pairs[e.key] + after;
+            this.setSelectionRange(start + 1, start + 1);
+        }
+        renderMarkdown();
+        return;
+    }
+
+    // 2. Enter 키로 목록/인용문 자동 완성 및 해제
+    if (e.key === 'Enter') {
+        const before = text.substring(0, start);
+        const lastNewline = before.lastIndexOf('\n');
+        const currentLine = before.substring(lastNewline + 1);
+
+        const listMatch = currentLine.match(/^(\s*)((?:>|[-*]|\d+\.) )/);
+
+        if (listMatch) {
+            e.preventDefault();
+            const prefix = listMatch[1]; 
+            const bullet = listMatch[2]; 
+
+            if (currentLine.trim() === bullet.trim()) {
+                this.value = text.substring(0, lastNewline + 1) + text.substring(start);
+                this.setSelectionRange(lastNewline + 1, lastNewline + 1);
+            } else {
+                let newBullet = bullet;
+                if (/\d+\./.test(bullet)) {
+                    const num = parseInt(bullet, 10);
+                    newBullet = (num + 1) + '. ';
+                }
+                const newLine = '\n' + prefix + newBullet;
+                this.value = before + newLine + text.substring(start);
+                this.setSelectionRange(start + newLine.length, start + newLine.length);
+            }
+        } else {
+            e.preventDefault();
+            this.value = before + '\n' + text.substring(start);
+            this.setSelectionRange(start + 1, start + 1);
+        }
+        renderMarkdown();
+        return;
+    }
+});
+
+// ===================================
+//  코드 복사 버튼 기능 (미리보기 패널)
+// ===================================
+preview.addEventListener('click', function(e) {
+    // (FIXED) #copy-html-btn이 아닌 버튼만 선택
+    const btn = e.target.closest('.copy-code-btn:not(#copy-html-btn)'); 
+    if (btn) {
+        e.preventDefault();
+        const code = btn.nextElementSibling.querySelector('code').innerText;
+
+        navigator.clipboard.writeText(code).then(() => {
+            btn.title = "Copied!";
+            btn.style.color = "var(--code-string)";
+            setTimeout(() => { 
+                btn.title = "Copy code"; 
+                btn.style.color = "var(--text-muted)";
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy code:', err);
+            btn.title = "Failed to copy";
+        });
+    }
+});
+
+// ===================================
+//  HTML 코드 복사 버튼 기능 (FIXED - 분리됨)
+// ===================================
+document.getElementById('copy-html-btn').addEventListener('click', function(e) {
+    const btn = e.currentTarget; // 클릭된 버튼 (this)
+    const htmlContent = document.getElementById('html-code-view').textContent;
+
+    navigator.clipboard.writeText(htmlContent).then(() => {
+        btn.title = "Copied!";
+        btn.style.color = "var(--code-string)"; // 피드백 스타일 재사용
+        setTimeout(() => { 
+            btn.title = "Copy HTML"; 
+            btn.style.color = "var(--text-muted)";
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy HTML:', err);
+        btn.title = "Failed to copy";
+    });
+});
+
+
+// Markdown 렌더링 (FIXED)
+function renderMarkdown() {
+  // 1. 마크다운을 HTML 조각으로 변환
+  const bodyHtml = simpleMarkdown(editor.value);
+
+  // 2. 상단 미리보기(preview) 패널은 그대로 HTML 조각으로 채움
+  preview.innerHTML = bodyHtml;
+
+  // 3. (NEW) 하단 HTML 코드 뷰를 위한 작업
+  // 3-1. 메인 스타일 시트 내용을 '안전하게' 가져옴
+  const mainStylesEl = document.getElementById('main-obsidian-styles');
+  const mainStyles = mainStylesEl ? mainStylesEl.textContent : '/* 🎨 메인 스타일을 찾지 못했습니다 */';
+
+  // 3-2. 사용자가 입력한 커스텀 CSS 스니펫을 가져옴
+  const customStyles = cssSnippet.value;
+
+  // 3-3. 현재 테마(라이트 모드) 상태를 확인
+  const isLightMode = document.body.classList.contains('light-mode');
+  const bodyClass = isLightMode ? ' class="light-mode"' : '';
+
+  // 3-4. (FIXED) 완전한 HTML 문서 템플릿을 생성 (레이아웃 오버라이드 포함)
+  const fullHtmlOutput = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown Export</title>
+
+  <style id="main-obsidian-styles">
+${mainStyles}
+  </style>
+
+  <style id="custom-snippet-styles">
+${customStyles}
+  </style>
+
+  <style>
+    /* 에디터의 flex 레이아웃 스타일('display: flex')이
+      결과물 파일에 영향을 주지 않도록 초기화(override)합니다.
+    */
+    body {
+      display: block; /* 'flex'에서 'block'으로 변경 */
+      flex-direction: unset;
+      height: auto;
+      overflow: auto;
+    }
+  </style>
+
+</head>
+<body${bodyClass}>
+
+  <div id="preview-wrapper" style="max-width: 800px; margin: 2em auto; padding: 2em;">
+${bodyHtml}
+  </div>
+  </body>
+</html>`;
+
+  // 4. 하단 HTML 뷰(htmlView)에 '텍스트'로 삽입
+  htmlView.textContent = fullHtmlOutput; 
+
+  // 5. 기타 기능 수행
+  highlightCode(); // 상단 미리보기 하이라이팅
+  localStorage.setItem('obsidian-md', editor.value);
+}
+
+// 로컬 저장 불러오기
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('obsidian-md');
+  if (saved) editor.value = saved;
+
+  // [수정] 기본 CSS 스니펫을 로드 시 즉시 적용합니다.
+  applyBtn.click(); 
+
+  renderMarkdown();
+});
+
+// 입력 시 즉시 렌더링 + 저장
+editor.addEventListener('input', renderMarkdown);
+
+// CSS 스니펫 적용
+applyBtn.addEventListener('click', () => {
+  let styleTag = document.getElementById('customCSS');
+  if (!styleTag) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'customCSS';
+      document.head.appendChild(styleTag);
+  }
+  styleTag.textContent = cssSnippet.value;
+});
+
+// 테마 전환
+toggleBtn.addEventListener('click', () => {
+  document.body.classList.toggle('light-mode');
+  renderMarkdown(); 
+});
+
+// (REMOVED) 내보내기 및 복사 버튼 리스너 제거
+// made by ACOPS1206 aecopse12@gmail.com
+</script>
+
+
+</body>
+</html>="0 0 16 16" fill="currentColor">
                     <path d="M5.75 1a.75.75 0 0 0-.75.75v1.5h-.75A1.75 1.75 0 0 0 2.5 5v8.25c0 .966.784 1.75 1.75 1.75h5.5A1.75 1.75 0 0 0 11.5 13.25V5A1.75 1.75 0 0 0 9.75 3.25h-.75v-1.5A.75.75 0 0 0 8.25 1h-2.5ZM3.5 5A.25.25 0 0 1 3.75 4.75h5.5a.25.25 0 0 1 .25.25v8.25a.25.25 0 0 1-.25.25h-5.5A.25.25 0 0 1 3.5 13.25V5ZM6 2.5v.75h3V2.5h-3Z"></path>
                 </svg>
             </button>`;
